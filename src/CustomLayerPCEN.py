@@ -19,12 +19,24 @@ class CustomLayerPCEN(tf.keras.layers.Layer):
     self.eps = tf.constant(value=[1e-6],dtype= 'float32', name = 'eps')
 
 
-  def call(self, energy, prec_moving_mean):
+  def call(self, data):
 
     s = self.s
-    eps = self.eps 
-    m = (1-s)*prec_moving_mean + s*energy
-
-    outputs = (((energy/((eps+m)**self.alpha))+self.delta)**self.r)-self.delta**self.r
-
+    eps = self.eps
+    outputs=np.copy(data)
+   
+    #Loop on each feature (corresponding to each frequency in the mfcc) and each timestep 
+    for i in np.size(data, 1):
+        prec_mean, current_mean = 0, 0
+        for j in np.size(data, 2):
+            #First timestep, there is no previous value, so we set prec_mean to zero
+            if j == 0:
+                prec_mean = 0
+            else:
+                prec_mean = current_mean
+            #Compute the current mean based on the previous mean and the current value
+            current_mean = (1-s)*prec_mean + s*data(i,j)
+            #Compute the value of the PCEN for each t, f
+            outputs(i,j) = (((data(i,j)/((eps+current_mean)**self.alpha))+self.delta)**self.r)-self.delta**self.r
+     
     return outputs
