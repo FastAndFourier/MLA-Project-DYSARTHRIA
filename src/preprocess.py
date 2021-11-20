@@ -4,12 +4,13 @@ import librosa.feature
 import librosa.display
 import librosa
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import os
 
 
 
-def preprocess(data_path,mfsc_path,pcen_path,rewrite=False):
+def preprocess(data_path,mfsc_path,pcen_path,rewrite=False, compression = True):
 
     if os.path.isfile(pcen_path) and not(rewrite):
         mfscs = np.load(mfsc_path,allow_pickle=True)
@@ -29,23 +30,20 @@ def preprocess(data_path,mfsc_path,pcen_path,rewrite=False):
     nb_frame = 251
 
     mfscs = np.zeros((n_obs,64,int(nb_frame)))
-
-    for k in range(n_obs):
-        data_ = librosa.effects.preemphasis(data[k])
-        mfscs[k] = librosa.feature.melspectrogram(y=data_, sr=fs,n_mels=64,win_length=win_len,hop_length=hop_len)
-        
-
-
     pcen = np.zeros((mfscs.shape[0],mfscs[0].shape[0],mfscs[0].shape[1]))
 
-    for k in range(n_obs):
-        pcen[k] = librosa.pcen(mfscs[k]/mfscs.max(),power=0.5,gain=0.98,bias=2.0,b=0.5,eps=1e-6)
-        mfscs[k] = librosa.amplitude_to_db(np.abs(mfscs[k]),ref=np.max)
+    for k in tqdm(range(n_obs), desc='processing'):
+        data_ = librosa.effects.preemphasis(data[k])
+        mfscs[k] = librosa.feature.melspectrogram(y=data_, sr=fs,n_mels=64,win_length=win_len,hop_length=hop_len)
+        pcen[k] = librosa.pcen(mfscs[k],power=0.5,gain=0.98,bias=2.0,b=0.5,eps=1e-6)
+        
+        if compression:
+            mfscs[k] = librosa.amplitude_to_db(np.abs(mfscs[k]),ref=np.max)
 
-    
     np.save(mfsc_path,mfscs,allow_pickle=True)
     np.save(pcen_path,pcen,allow_pickle=True)
 
     print("Processing done!")
 
     return mfscs, pcen
+
