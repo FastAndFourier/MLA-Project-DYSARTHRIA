@@ -34,9 +34,12 @@ if __name__ == "__main__":
     rewrite = False
 
     print("--------- Training data ---------\n")
-    mfscs_train, pcen_train = preprocess("../data/x_train.npy","../data/mfsc_train.npy","../data/pcen_train.npy",rewrite)
+    mfscs_train = normalize_mfsc("x_train","log")
+    pcen_train = normalize_mfsc("x_train","pcen")
+
     print("\n--------- Test data ---------\n")
-    mfscs_test, pcen_test = preprocess("../data/x_test.npy","../data/mfsc_test.npy","../data/pcen_test.npy",rewrite)
+    mfscs_test = normalize_mfsc("x_test","log")
+    pcen_test = normalize_mfsc("x_test","pcen")
 
 
     

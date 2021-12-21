@@ -40,7 +40,12 @@ def compute_mfsc(set):
     return mfscs
 
 
-def normalize_mfsc(mfsc,set,method):
+def normalize_mfsc(set,method):
+
+    if os.path.isfile('../data/mfsc_'+set+'.npy'):
+        mfsc = np.load('../data/mfsc_'+set+'.npy')
+    else:
+        mfsc = compute_mfsc(set)
 
     normalized_feature = np.zeros(mfsc.shape)
 
