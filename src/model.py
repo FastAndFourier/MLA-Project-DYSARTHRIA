@@ -50,6 +50,8 @@ class FullModel():
         self.batch_size = args.batch_size
         self.epochs = args.epochs
 
+        self.n_ex=args.n_ex
+
 
     def build(self):
 
@@ -85,16 +87,31 @@ class FullModel():
         if self.model == None:
             print("Model has not been build. Please run buildModel")
             return None
-
+        
         if self.frontEnd == 'melfilt':
             if self.normalization == "learn_pcen":
                 X_train = np.load('../data/mfsc_train.npy',allow_pickle=True)    
             else:
                 X_train = np.load('../data/'+self.normalization+'_train.npy',allow_pickle=True)
+        print(X_train.shape)
+
+        y_train = np.load("../data/y_train.npy")
+
+        p = np.random.permutation(len(y_train))
+
+        X_train = X_train[p]
+        y_train = y_train[p]
+
+        if self.n_ex==0:
+            val=int(input("Number of examples ? "))
+            X_train = X_train[0:val]
+        
         
 
-        np.random.shuffle(X_train)
-        y_train = np.load("../data/y_train.npy")
+        if self.n_ex==0:
+            y_train = y_train[0:val]
+      
+    
         print(len(y_train[y_train==0]),len(y_train[y_train==1]))
         y_train = tf.keras.utils.to_categorical(y_train.astype(int),num_classes=2)
 
@@ -198,9 +215,10 @@ if __name__ == '__main__':
 
     parser.add_argument('-frontEnd',choices=["LLD","melfilt","TDfilt"],nargs='?',type=str,default="melfilt")
     parser.add_argument('-normalization',choices=["log","mvn","pcen","learn_pcen"],nargs='?',type=str,default="log")
-    parser.add_argument('-lr',nargs='?',type=float,default=0.001)
+    parser.add_argument('-lr',nargs='?',type=float,default=0.0001)
     parser.add_argument('-batch_size',nargs='?',type=int,default=32)
     parser.add_argument('-epochs',nargs='?',type=int,default=5)
+    parser.add_argument('-n_ex', nargs='?', type=int, default=1)
     
     args = parser.parse_args()
 
