@@ -1,11 +1,15 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Permute, Multiply, Lambda, Dropout
+from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Permute, Multiply, Lambda, Dropout, Conv2D, MaxPool2D
 import tensorflow.keras.backend as K
 
 
 import argparse
+
+from tensorflow.python.keras.layers.core import Flatten
+
+from sklearn.model_selection import train_test_split
 
 CLASS_NUMBER = 2
 
@@ -33,13 +37,12 @@ def uar_metric(y_true,y_pred):
 
 
 
-
-
 class FullModel():
 
     def __init__(self,args):
 
         self.frontEnd = args.frontEnd
+        self.backEnd = args.backEnd
         self.normalization = args.normalization
 
         self.model = None
@@ -53,7 +56,7 @@ class FullModel():
         self.n_ex=args.n_ex
 
 
-    def build(self):
+    def build(self,optimizer="adam"):
 
 
         if self.frontEnd in ['LLD','melfilt'] :
@@ -66,12 +69,13 @@ class FullModel():
                 x = CustomLayerPCEN2()(input)
 
 
-            model = Model(input,AttentionModelLayer()(x))
+            if self.backEnd == "attention":
+                model = Model(input,AttentionModelLayer()(x))
+            else:
+                model = Model(input,CNNModelLayer()(x))
 
-            optimizer = tf.keras.optimizers.SGD(learning_rate=self.lr,momentum=0.98)
-            #tf.keras.optimizers.Adam(learning_rate=self.lr)
-            
-            model.compile(optimizer=optimizer, loss = 'binary_crossentropy', metrics = [uar_metric,'binary_accuracy'],run_eagerly=True)
+  
+            model.compile(optimizer=optimizer, loss = 'binary_crossentropy', metrics = ['binary_accuracy'],run_eagerly=True)
             model.summary()
 
             self.model = model
@@ -82,25 +86,33 @@ class FullModel():
 
             return None
 
-    def train(self):
+    def train(self,path="../data/"):
 
         if self.model == None:
             print("Model has not been build. Please run buildModel")
             return None
         
         if self.frontEnd == 'melfilt':
-            if self.normalization == "learn_pcen":
-                X_train = np.load('../data/mfsc_train.npy',allow_pickle=True)    
+
+            if self.normalization in ["none","learn_pcen"]:
+                X_train = np.load(path+'mfsc_train.npy',allow_pickle=True) 
+                X_val = np.load(path+'mfsc_val.npy',allow_pickle=True)      
             else:
-                X_train = np.load('../data/'+self.normalization+'_train.npy',allow_pickle=True)
-        print(X_train.shape)
+                X_train = np.load(path+self.normalization+'_train.npy',allow_pickle=True)
+                X_val = np.load(path+self.normalization+'_val.npy',allow_pickle=True)
+               
+        
 
-        y_train = np.load("../data/y_train.npy")
+        y_train = np.load(path+"y_train.npy")
+        y_val = np.load(path+"y_val.npy")
 
-        p = np.random.permutation(len(y_train))
+        dataX = np.concatenate((X_train,X_val),axis=0)
+        dataY = np.concatenate((y_train,y_val),axis=0)
 
-        X_train = X_train[p]
-        y_train = y_train[p]
+
+        X_train, X_val, y_train, y_val = train_test_split(dataX, dataY, test_size=1 - 0.80)
+       
+
 
         if self.n_ex==0:
             val=int(input("Number of examples ? "))
@@ -114,10 +126,11 @@ class FullModel():
     
         print(len(y_train[y_train==0]),len(y_train[y_train==1]))
         y_train = tf.keras.utils.to_categorical(y_train.astype(int),num_classes=2)
+        y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
 
         self.model.fit(X_train, y_train, batch_size = self.batch_size, 
-                       epochs = self.epochs, verbose = 1)
+                       epochs = self.epochs, verbose = 1, validation_data=(X_val,y_val))
 
         return self.model.history
 
@@ -172,8 +185,46 @@ class CustomLayerPCEN2(tf.keras.layers.Layer):
     return pcen
 
 
+class CNNModelLayer(tf.keras.layers.Layer):
+    def __init__(self):
+        super(CNNModelLayer,self).__init__()
 
-        
+        self.cnn1 = Conv2D(filters=8,kernel_size=3)
+        self.do1 = Dropout(rate=0.7)
+        self.mp1 = MaxPool2D(pool_size=(1,3))
+
+        self.cnn2 = Conv2D(filters=32,kernel_size=3)
+        self.do2 = Dropout(rate=0.7)
+        self.mp2 = MaxPool2D(pool_size=(1,3))
+
+        self.flat = tf.keras.layers.Flatten()
+
+        self.dense1 = Dense(units=64,activation="relu")
+        self.do3 = Dropout(rate=0.7)
+
+        self.dense2 = Dense(units=32,activation="relu")
+        self.do4 = Dropout(rate=0.7)
+
+        self.dense3 = Dense(units=2,activation="softmax")
+
+    def __call__(self, inputs):
+
+        inputs = tf.expand_dims(inputs, axis=-1)
+
+        x = self.do1(self.cnn1(inputs))
+        x = self.mp1(x)
+        x = self.do2(self.cnn2(x))
+        x = self.mp2(x)
+
+        x = self.flat(x)
+
+        x = self.do3(self.dense1(x))
+        x = self.do4(self.dense2(x))
+
+        x = self.dense3(x)
+
+
+        return x
 
 class AttentionModelLayer(tf.keras.layers.Layer):
     def __init__(self):
@@ -186,27 +237,29 @@ class AttentionModelLayer(tf.keras.layers.Layer):
         self.ave_softmax = Softmax()
         self.ave_permute = Permute([2,1])
         #self.output_lambda = Lambda(lambda layer: K.sum(layer, axis = -1))
-        self.mutliply = Multiply()
+        self.multiply = Multiply()
         self.layer_output = Dense(CLASS_NUMBER)
         
     def __call__(self, inputs):
         x = self.lstm(inputs)
         #ave = Attention Vector Estimation
         ave = self.ave_dropout1(x)
-        ave = self.ave_dense1(x)
-        ave = self.ave_dropout2(x)
+        ave = self.ave_dense1(ave)
+        ave = self.ave_dropout2(ave)
         ave = self.ave_dense2(ave)
         ave = self.ave_softmax(ave)
         ave = self.ave_permute(ave)
         
         output_attention =  Lambda(lambda layer: K.sum(layer, axis = -1))(x)
-        output_attention = self.mutliply([output_attention, ave])
+        output_attention = self.multiply([output_attention, ave])
         
         return self.layer_output(output_attention)
     
 
 if __name__ == '__main__':
 
+    # Command example :
+    # python model.py -frontEnd melfilt -backEnd cnn -normalization pcen -batch_size 8 -epochs 20
 
     parser = argparse.ArgumentParser(
         usage=__doc__,
@@ -214,7 +267,8 @@ if __name__ == '__main__':
 	
 
     parser.add_argument('-frontEnd',choices=["LLD","melfilt","TDfilt"],nargs='?',type=str,default="melfilt")
-    parser.add_argument('-normalization',choices=["log","mvn","pcen","learn_pcen"],nargs='?',type=str,default="log")
+    parser.add_argument('-backEnd',choices=["attention",'cnn'],nargs='?',type=str,default="attention")
+    parser.add_argument('-normalization',choices=["log","mvn","pcen","learn_pcen","none"],nargs='?',type=str,default="log")
     parser.add_argument('-lr',nargs='?',type=float,default=0.0001)
     parser.add_argument('-batch_size',nargs='?',type=int,default=32)
     parser.add_argument('-epochs',nargs='?',type=int,default=5)
@@ -223,20 +277,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-
     model1 = FullModel(args)
     model1.build()
     model1.train()
 
 
-    # data = np.random.uniform(1,100, size=(2000,500)) 
-    # test_model = attention_model(data[np.newaxis, ...])
-    
-    # test_model.summary()
-    
-    # attention_layer = AttentionModelLayer()
-    # print('test')
-    # y = attention_layer(data[np.newaxis, ...])
+
 
 
     
