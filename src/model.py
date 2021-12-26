@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Permute, Multiply, Lambda, Dropout, Conv2D, MaxPool2D
 import tensorflow.keras.backend as K
+import matplotlib.pyplot as plt
 
 
 import argparse
@@ -10,6 +11,9 @@ import argparse
 from tensorflow.python.keras.layers.core import Flatten
 
 from sklearn.model_selection import train_test_split
+
+import os, json 
+from time import time
 
 CLASS_NUMBER = 2
 
@@ -160,6 +164,41 @@ class FullModel():
 
         return self.model.history
 
+    
+    def save(self,metrics_val,metrics_test):
+
+        if not(os.path.isdir('../model_archive')):
+            os.mkdir('../model_archive')
+
+        if not os.path.isfile('../registry.json'):
+            data = {}
+        else:
+            with os.open('../registry.json') as f:
+                data = json.load(f)
+
+        id_model = np.random.randint(low=0, high=10**8)
+
+        data[id_model] = {
+            "frontEnd" : self.frontEnd,
+            "backEnd" : self.backEnd,
+            "normalization" : self.normalization,
+            "lr" : self.lr,
+            "batch_size" : self.batch_size,
+            "epochs" : self.epochs,
+            "loss_val" : metrics_val[0],
+            "accuracy_val" : metrics_val[1],
+            "uar_val" : metrics_val[2],
+            "loss_test" : metrics_test[0],
+            "accuracy_test" : metrics_test[1],
+            "uar_test" : metrics_test[2],
+        }
+
+        self.model.save('../model/'+str(id_model))
+        with open('../model_registry.json', 'w') as outfile:
+            json.dump(data, outfile)
+
+
+
 
 
 class CustomLayerPCEN2(tf.keras.layers.Layer):
@@ -288,6 +327,10 @@ if __name__ == '__main__':
     # Command example :
     # python model.py -frontEnd melfilt -backEnd cnn -normalization pcen -batch_size 8 -epochs 20
 
+    DATA_PATH = "../data/"
+    set_ = "mfsc"
+    path = DATA_PATH + set_
+    
     parser = argparse.ArgumentParser(
         usage=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -302,11 +345,40 @@ if __name__ == '__main__':
     parser.add_argument('-n_ex', nargs='?', type=int, default=1)
     
     args = parser.parse_args()
-
-
+    
     model1 = FullModel(args)
-    model1.build()
-    model1.train()
+    _ = model1.build(tf.keras.optimizers.Adam(learning_rate=args.lr))
+    
+    #tensorboard = tf.keras.callbacks.TensorBoard(log_dir='logs/{}'.format(time()))
+    
+    start = time()
+    history = model1.train()
+    print("Training duration = {:.2f} minutes".format((time()-start)//60))
+    
+    X_test = np.load(path+"_test.npy",allow_pickle=True)
+
+    y_test = np.load(DATA_PATH+"y_test.npy",allow_pickle=True)
+    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+    
+    X_val = np.load(path+"_val.npy",allow_pickle=True)
+
+    y_val = np.load(DATA_PATH+"y_val.npy",allow_pickle=True)
+    y_val = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+
+
+    metrics_test = model1.model.evaluate(X_test,y_test)
+    metrics_val = [0,0,0]#model1.model.evaluate(X_val,y_val)
+    
+    model1.save(metrics_val,metrics_test)
+
+
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+    plt.show()
 
 
 
