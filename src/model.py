@@ -14,25 +14,51 @@ from sklearn.model_selection import train_test_split
 CLASS_NUMBER = 2
 
 
-def uar_metric(y_true,y_pred):
+# def uar_metric(y_true,y_pred):
 
-    pred = np.zeros(y_pred.shape[0])
-    true = np.zeros(y_pred.shape[0])
+#     pred = np.zeros(y_pred.shape[0])
+#     true = np.zeros(y_pred.shape[0])
 
-    for k in range(y_pred.shape[0]):
-        pred[k] = int(y_pred[k,0,0].numpy() < y_pred[k,0,1].numpy())
-        true[k] = int(y_true[k,0].numpy() < y_true[k,1].numpy())
+#     for k in range(y_pred.shape[0]):
+#         pred[k] = int(y_pred[k,0,0].numpy() < y_pred[k,0,1].numpy())
+#         true[k] = int(y_true[k,0].numpy() < y_true[k,1].numpy())
 
-    #print(pred,y_pred.numpy())
+#     #print(pred,y_pred.numpy())
 
-    TP = tf.math.count_nonzero(true*pred)
-    FP = tf.math.count_nonzero((true - 1) * pred)
-    FN = tf.math.count_nonzero((pred - 1) * true)
-    TN = np.size(pred) - TP - FP - FN
+#     TP = tf.math.count_nonzero(true*pred)
+#     FP = tf.math.count_nonzero((true - 1) * pred)
+#     FN = tf.math.count_nonzero((pred - 1) * true)
+#     TN = np.size(pred) - TP - FP - FN
 
 
 
-    return .5*(TP/(TP+FN) + TN/(TN+FP)) #(TP+TN)/(TP+TN+FP+FN) #TN/(TN+FP) # #
+#     return .5*(TP/(TP+FN) + TN/(TN+FP)) #(TP+TN)/(TP+TN+FP+FN) #TN/(TN+FP) # #
+
+# Code found on : https://stackoverflow.com/questions/54285037/how-can-i-get-accuracy-from-confusion-matrix-in-tensorflow-or-keras-in-the-form
+def non_nan_average(x):
+    # Computes the average of all elements that are not NaN in a rank 1 tensor
+    nan_mask = tf.math.is_nan(x)
+    x = tf.boolean_mask(x, tf.logical_not(nan_mask))
+    return K.mean(x)
+
+
+
+def uar_metric(y_true, y_pred):
+    
+    pred_class_label = K.argmax(y_pred, axis=-1)
+    true_class_label = K.argmax(y_true, axis=-1)
+
+    cf_mat = tf.math.confusion_matrix(true_class_label, pred_class_label )
+
+    diag = tf.linalg.tensor_diag_part(cf_mat)   
+
+    # Calculate the total number of data examples for each class
+    total_per_class = tf.reduce_sum(cf_mat, axis=1)
+
+    acc_per_class = diag / tf.maximum(1, total_per_class)  
+    uar = non_nan_average(acc_per_class)
+
+    return uar
 
 
 
