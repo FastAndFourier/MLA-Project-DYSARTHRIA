@@ -47,27 +47,35 @@ def normalize_mfsc(set,method):
     else:
         mfsc = compute_mfsc(set)
 
+
     normalized_feature = np.zeros(mfsc.shape)
 
-    if method == "log" and not os.path.isfile('../data/log_'+set+'.npy'):
-        for k in range(mfsc.shape[0]):
-            normalized_feature[k] = librosa.amplitude_to_db(mfsc[k],ref=np.max)
+    if method=="log":
+        if os.path.isfile('../data/log_'+set+'.npy'):
+            return np.load('../data/log_'+set+'.npy')
+        else:
+            for k in range(mfsc.shape[0]):
+                normalized_feature[k] = librosa.amplitude_to_db(mfsc[k],ref=np.max)
 
-        np.save('../data/log_'+set+'.npy',normalized_feature)
-        
+            np.save('../data/log_'+set+'.npy',normalized_feature)
 
-    elif method == "mvn" and not os.path.isfile('../data/mvn_'+set+'.npy'):
-        for k in range(mfsc.shape[0]):
-            normalized_feature[k] = (mfsc[k] - mfsc[k].mean())/mfsc[k].std()
+    elif method=="mvn":
+        if os.path.isfile('../data/mvn_'+set+'.npy'):
+            return np.load('../data/mvn_'+set+'.npy')
+        else:
+            for k in range(mfsc.shape[0]):
+                normalized_feature[k] = (mfsc[k] - mfsc[k].mean())/mfsc[k].std()
 
-        np.save('../data/mvn_'+set+'.npy',normalized_feature)
+            np.save('../data/mvn_'+set+'.npy',normalized_feature)
 
-    elif method == "pcen" and not os.path.isfile('../data/pcen_'+set+'.npy'):
-        for k in range(mfsc.shape[0]):
-            normalized_feature[k] = librosa.pcen(mfsc[k],power=0.5,gain=0.98,bias=2.0,b=0.5,eps=1e-6)
+    elif method == "pcen":
+        if os.path.isfile('../data/pcen_'+set+'.npy'):
+            return np.load('../data/pcen_'+set+'.npy')
+        else:
+            for k in range(mfsc.shape[0]):
+                normalized_feature[k] = librosa.pcen(mfsc[k],power=0.5,gain=0.98,bias=2.0,b=0.5,eps=1e-6)
 
-        np.save('../data/pcen_'+set+'.npy',normalized_feature)
-
+            np.save('../data/pcen_'+set+'.npy',normalized_feature)
 
 
     return normalized_feature

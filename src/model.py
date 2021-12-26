@@ -31,8 +31,8 @@ CLASS_NUMBER = 2
 #     TN = np.size(pred) - TP - FP - FN
 
 
+#     return .5*(TP/(TP+FN) + TN/(TN+FP))
 
-#     return .5*(TP/(TP+FN) + TN/(TN+FP)) #(TP+TN)/(TP+TN+FP+FN) #TN/(TN+FP) # #
 
 # Code found on : https://stackoverflow.com/questions/54285037/how-can-i-get-accuracy-from-confusion-matrix-in-tensorflow-or-keras-in-the-form
 def non_nan_average(x):
@@ -101,7 +101,7 @@ class FullModel():
                 model = Model(input,CNNModelLayer()(x))
 
   
-            model.compile(optimizer=optimizer, loss = 'binary_crossentropy', metrics = ['binary_accuracy'],run_eagerly=True)
+            model.compile(optimizer=optimizer, loss = 'binary_crossentropy', metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
             model.summary()
 
             self.model = model
@@ -132,11 +132,11 @@ class FullModel():
         y_train = np.load(path+"y_train.npy")
         y_val = np.load(path+"y_val.npy")
 
-        dataX = np.concatenate((X_train,X_val),axis=0)
-        dataY = np.concatenate((y_train,y_val),axis=0)
+#         dataX = np.concatenate((X_train,X_val),axis=0)
+#         dataY = np.concatenate((y_train,y_val),axis=0)
 
 
-        X_train, X_val, y_train, y_val = train_test_split(dataX, dataY, test_size=1 - 0.80)
+#         X_train, X_val, y_train, y_val = train_test_split(dataX, dataY, test_size=1 - 0.80)
        
 
 
@@ -281,6 +281,7 @@ class AttentionModelLayer(tf.keras.layers.Layer):
         
         return self.layer_output(output_attention)
     
+
 
 if __name__ == '__main__':
 
