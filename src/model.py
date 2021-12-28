@@ -104,7 +104,7 @@ class FullModel():
 
         if self.frontEnd in ['LLD','melfilt'] :
 
-            input = tf.keras.layers.Input(shape=self.SIZE_INPUT,batch_size=self.batch_size)
+            input = tf.keras.layers.Input(shape=self.SIZE_INPUT)#,batch_size=self.batch_size)
             x = input
 
             if self.normalization == 'learn_pcen':
@@ -118,7 +118,7 @@ class FullModel():
                 model = Model(input,CNNModelLayer()(x))
 
             if self.loss == "normal_ce":
-                loss_ = 'binary_crossentropy'
+                loss_ = 'binary_crossentropy'#tf.keras.losses.BinaryCrossentropy
             else:
                 loss_ = weighted_binary_crossentropy
                 
@@ -331,7 +331,7 @@ class AttentionModelLayer(tf.keras.layers.Layer):
         self.ave_permute = Permute([2,1])
         self.output_lambda = Lambda(lambda layer: K.sum(layer, axis = -1))
         self.multiply = Multiply()
-        self.layer_output = Dense(CLASS_NUMBER,activation="softmax")
+        self.layer_output = Dense(CLASS_NUMBER)
         
     def __call__(self, inputs):
         
