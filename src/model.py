@@ -321,12 +321,18 @@ class CNNModelLayer(tf.keras.layers.Layer):
 
 class AttentionModelLayer(tf.keras.layers.Layer):
     def __init__(self):
-        super(AttentionModelLayer, self).__init__()
         self.lstm = LSTM(60, return_sequences = True)
-        self.ave_dense1 = Dense(50)
         self.ave_dropout1 = Dropout(rate=0.2)
-        self.ave_dense2 = Dense(1)
+        self.bn1 = BatchNormalization()
+        
+        self.ave_dense1 = Dense(50)
         self.ave_dropout2 = Dropout(rate=0.5)
+        self.bn2 = BatchNormalization()
+        
+        
+        self.ave_dense2 = Dense(1)
+        self.ave_dropout3 = Dropout(rate=0.5)
+        
         self.ave_softmax = Softmax()
         self.ave_permute = Permute([2,1])
         self.output_lambda = Lambda(lambda layer: K.sum(layer, axis = -1))
@@ -335,13 +341,20 @@ class AttentionModelLayer(tf.keras.layers.Layer):
         
     def __call__(self, inputs):
         
-        #inputs = tf.reshape(inputs,shape=[inputs.shape[0],inputs.shape[2],inputs.shape[1]])
         x = self.lstm(inputs)
         #ave = Attention Vector Estimation
-        ave = self.ave_dense1(x)
+        
         ave = self.ave_dropout1(x)
-        ave = self.ave_dense2(ave)
+        ave = self.bn1(ave)
+        
+        ave = self.ave_dense1(ave)
         ave = self.ave_dropout2(ave)
+        ave = self.bn2(ave)
+        
+        
+        ave = self.ave_dense2(ave)
+        ave = self.ave_dropout3(ave)
+        
         ave = self.ave_softmax(ave)
         ave = self.ave_permute(ave)
         
