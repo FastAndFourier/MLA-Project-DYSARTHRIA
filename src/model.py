@@ -1,10 +1,11 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Permute, Multiply, Lambda, Dropout, Conv2D, MaxPool2D
+from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Permute, Multiply, Lambda, Dropout, Conv2D, BatchNormalization
 import tensorflow.keras.backend as K
 import matplotlib.pyplot as plt
 
+from sklearn.metrics import log_loss
 
 import argparse
 
@@ -17,6 +18,8 @@ from time import time
 
 CLASS_NUMBER = 2
 
+N_NEG = 3182/(3182+1382)
+N_POS = 1382/(3182+1382)
 
 # def uar_metric(y_true,y_pred):
 
@@ -64,6 +67,15 @@ def uar_metric(y_true, y_pred):
 
     return uar
 
+def weighted_binary_crossentropy(y_true,y_pred):
+
+    true_label = float(K.argmax(y_true, axis=-1))
+
+    return tf.math.reduce_sum(-tf.math.add(N_POS*true_label*tf.math.log(y_pred[:,:,1]),N_NEG*(1-true_label)*tf.math.log(y_pred[:,:,0])))/len(y_true) 
+
+
+
+
 
 
 
@@ -74,6 +86,7 @@ class FullModel():
         self.frontEnd = args.frontEnd
         self.backEnd = args.backEnd
         self.normalization = args.normalization
+        self.loss = args.loss
 
         self.model = None
 
@@ -91,7 +104,7 @@ class FullModel():
 
         if self.frontEnd in ['LLD','melfilt'] :
 
-            input = tf.keras.layers.Input(shape=self.SIZE_INPUT)
+            input = tf.keras.layers.Input(shape=self.SIZE_INPUT,batch_size=self.batch_size)
             x = input
 
             if self.normalization == 'learn_pcen':
@@ -104,8 +117,21 @@ class FullModel():
             else:
                 model = Model(input,CNNModelLayer()(x))
 
+            if self.loss == "normal_ce":
+                loss_ = 'binary_crossentropy'
+            else:
+                loss_ = weighted_binary_crossentropy
+                
+            lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(self.lr,
+                                                                         decay_steps=1000,
+                                                                         decay_rate=0.70,
+                                                                         staircase=True)
+            
+            if type(optimizer)!= str:
+                optimizer.learning_rate = lr_schedule
+
   
-            model.compile(optimizer=optimizer, loss = 'binary_crossentropy', metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
+            model.compile(optimizer=optimizer, loss = loss_, metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
             model.summary()
 
             self.model = model
@@ -131,7 +157,6 @@ class FullModel():
                 X_train = np.load(path+self.normalization+'_train.npy',allow_pickle=True)
                 X_val = np.load(path+self.normalization+'_val.npy',allow_pickle=True)
                
-        
 
         y_train = np.load(path+"y_train.npy")
         y_val = np.load(path+"y_val.npy")
@@ -153,8 +178,7 @@ class FullModel():
         if self.n_ex==0:
             y_train = y_train[0:val]
       
-    
-        print(len(y_train[y_train==0]),len(y_train[y_train==1]))
+
         y_train = tf.keras.utils.to_categorical(y_train.astype(int),num_classes=2)
         y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
@@ -185,12 +209,12 @@ class FullModel():
             "lr" : self.lr,
             "batch_size" : self.batch_size,
             "epochs" : self.epochs,
-            "loss_val" : metrics_val[0],
-            "accuracy_val" : metrics_val[1],
-            "uar_val" : metrics_val[2],
-            "loss_test" : metrics_test[0],
-            "accuracy_test" : metrics_test[1],
-            "uar_test" : metrics_test[2],
+            "loss_val" : str(metrics_val[0]),
+            "accuracy_val" : str(metrics_val[1]),
+            "uar_val" : str(metrics_val[2]),
+            "loss_test" : str(metrics_test[0]),
+            "accuracy_test" : str(metrics_test[1]),
+            "uar_test" : str(metrics_test[2]),
         }
 
         self.model.save('../model/'+str(id_model))
@@ -254,21 +278,23 @@ class CNNModelLayer(tf.keras.layers.Layer):
     def __init__(self):
         super(CNNModelLayer,self).__init__()
 
-        self.cnn1 = Conv2D(filters=8,kernel_size=3)
-        self.do1 = Dropout(rate=0.7)
-        self.mp1 = MaxPool2D(pool_size=(1,3))
+        self.cnn1 = Conv2D(filters=4,kernel_size=3,activation="relu")
+        self.do1 = Dropout(rate=0.2)
+        
 
-        self.cnn2 = Conv2D(filters=32,kernel_size=3)
-        self.do2 = Dropout(rate=0.7)
-        self.mp2 = MaxPool2D(pool_size=(1,3))
+        self.cnn2 = Conv2D(filters=16,kernel_size=3,activation="relu")
+        self.do2 = Dropout(rate=0.5)
+        self.bn1 = BatchNormalization()
+        
 
         self.flat = tf.keras.layers.Flatten()
 
-        self.dense1 = Dense(units=64,activation="relu")
-        self.do3 = Dropout(rate=0.7)
+        self.dense1 = Dense(units=32,activation="relu")
+        self.do3 = Dropout(rate=0.5)
 
-        self.dense2 = Dense(units=32,activation="relu")
-        self.do4 = Dropout(rate=0.7)
+        self.dense2 = Dense(units=16,activation="relu")
+        self.do4 = Dropout(rate=0.5)
+        self.bn2 = BatchNormalization()
 
         self.dense3 = Dense(units=2,activation="softmax")
 
@@ -276,42 +302,46 @@ class CNNModelLayer(tf.keras.layers.Layer):
 
         inputs = tf.expand_dims(inputs, axis=-1)
 
+        
         x = self.do1(self.cnn1(inputs))
-        x = self.mp1(x)
         x = self.do2(self.cnn2(x))
-        x = self.mp2(x)
+        x = self.bn1(x)
 
         x = self.flat(x)
 
         x = self.do3(self.dense1(x))
         x = self.do4(self.dense2(x))
+        x = self.bn2(x)
 
         x = self.dense3(x)
 
 
         return x
 
+
 class AttentionModelLayer(tf.keras.layers.Layer):
     def __init__(self):
         super(AttentionModelLayer, self).__init__()
         self.lstm = LSTM(60, return_sequences = True)
-        self.ave_dropout1 = Dropout(rate=0.7)
         self.ave_dense1 = Dense(50)
-        self.ave_dropout2 = Dropout(rate=0.7)
+        self.ave_dropout1 = Dropout(rate=0.2)
         self.ave_dense2 = Dense(1)
+        self.ave_dropout2 = Dropout(rate=0.5)
         self.ave_softmax = Softmax()
         self.ave_permute = Permute([2,1])
-        #self.output_lambda = Lambda(lambda layer: K.sum(layer, axis = -1))
+        self.output_lambda = Lambda(lambda layer: K.sum(layer, axis = -1))
         self.multiply = Multiply()
-        self.layer_output = Dense(CLASS_NUMBER)
+        self.layer_output = Dense(CLASS_NUMBER,activation="softmax")
         
     def __call__(self, inputs):
+        
+        #inputs = tf.reshape(inputs,shape=[inputs.shape[0],inputs.shape[2],inputs.shape[1]])
         x = self.lstm(inputs)
         #ave = Attention Vector Estimation
+        ave = self.ave_dense1(x)
         ave = self.ave_dropout1(x)
-        ave = self.ave_dense1(ave)
-        ave = self.ave_dropout2(ave)
         ave = self.ave_dense2(ave)
+        ave = self.ave_dropout2(ave)
         ave = self.ave_softmax(ave)
         ave = self.ave_permute(ave)
         
@@ -327,9 +357,7 @@ if __name__ == '__main__':
     # Command example :
     # python model.py -frontEnd melfilt -backEnd cnn -normalization pcen -batch_size 8 -epochs 20
 
-    DATA_PATH = "../data/"
-    set_ = "mfsc"
-    path = DATA_PATH + set_
+    
     
     parser = argparse.ArgumentParser(
         usage=__doc__,
@@ -339,12 +367,17 @@ if __name__ == '__main__':
     parser.add_argument('-frontEnd',choices=["LLD","melfilt","TDfilt"],nargs='?',type=str,default="melfilt")
     parser.add_argument('-backEnd',choices=["attention",'cnn'],nargs='?',type=str,default="attention")
     parser.add_argument('-normalization',choices=["log","mvn","pcen","learn_pcen","none"],nargs='?',type=str,default="log")
+    parser.add_argument('-loss',choices=["normal_ce","weighted_ce"],nargs='?',type=str,default="normal_ce")
     parser.add_argument('-lr',nargs='?',type=float,default=0.0001)
     parser.add_argument('-batch_size',nargs='?',type=int,default=32)
     parser.add_argument('-epochs',nargs='?',type=int,default=5)
     parser.add_argument('-n_ex', nargs='?', type=int, default=1)
     
     args = parser.parse_args()
+
+    DATA_PATH = "../data/"
+    set_ = args.normalization
+    path = DATA_PATH + set_
     
     model1 = FullModel(args)
     _ = model1.build(tf.keras.optimizers.Adam(learning_rate=args.lr))
@@ -363,13 +396,13 @@ if __name__ == '__main__':
     X_val = np.load(path+"_val.npy",allow_pickle=True)
 
     y_val = np.load(DATA_PATH+"y_val.npy",allow_pickle=True)
-    y_val = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
 
     metrics_test = model1.model.evaluate(X_test,y_test)
-    metrics_val = [0,0,0]#model1.model.evaluate(X_val,y_val)
+    metrics_val = model1.model.evaluate(X_val,y_val)#model1.model.evaluate(X_val,y_val)
     
-    model1.save(metrics_val,metrics_test)
+    #model1.save(np.round(metrics_val,4),np.round(metrics_test,4))
 
 
     plt.plot(history.history['loss'])
@@ -377,6 +410,7 @@ if __name__ == '__main__':
     plt.title('model loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')
+    plt.xlim((0,args.epochs))
     plt.legend(['train', 'val'], loc='upper left')
     plt.show()
 
