@@ -108,11 +108,13 @@ class FullModel():
 
         if self.frontEnd in ['LLD','melfilt','TDfilt'] :
 
-            
-
             if self.frontEnd == 'TDfilt':
                 input = tf.keras.layers.Input(shape=[40000,1])#size of the raw signal in time domain
                 x = TD_melfilter()(input)
+
+            if self.frontEnd == 'LLD':
+                input = tf.keras.layers.Input(shape=[251, 32])# Number of windows and number of lld + lld_deltas (2*16)
+                x = input
             else:
                 input = tf.keras.layers.Input(shape=self.SIZE_INPUT)#,batch_size=self.batch_size)
                 x = input
@@ -123,9 +125,9 @@ class FullModel():
 
 
             if self.backEnd == "attention":
-                model = Model(input,AttentionModelLayer()(x))
+                model = Model(input, AttentionModelLayer()(x))
             else:
-                model = Model(input,CNNModelLayer()(x))
+                model = Model(input, CNNModelLayer()(x))
 
             if self.loss == "normal_ce":
                 loss_ = 'binary_crossentropy'#tf.keras.losses.BinaryCrossentropy
@@ -141,7 +143,7 @@ class FullModel():
             #     optimizer.learning_rate = lr_schedule
 
             optimizer.momentum = 0.98
-            model.compile(optimizer=optimizer, loss = loss_, metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
+            model.compile(optimizer=optimizer, loss = loss_, metrics = ['binary_accuracy', uar_metric], run_eagerly=True)
             model.summary()
 
             self.model = model
@@ -172,6 +174,10 @@ class FullModel():
             X_train = np.load(path+'x_train.npy',allow_pickle=True)
             X_val = np.load(path+'x_val.npy',allow_pickle=True)
 
+        if self.frontEnd == 'LLD':
+            X_train = np.load(path+'full_lld_is09_train.npy',allow_pickle=True)
+            X_val = np.load(path+'full_lld_is09_val.npy',allow_pickle=True)
+           
 
         y_train = np.load(path+"y_train.npy")
         y_val = np.load(path+"y_val.npy")
@@ -389,15 +395,25 @@ class TD_melfilter(tf.keras.layers.Layer):
         print("rouge")
         x = tf.keras.layers.Conv1D(filters = 80, kernel_size = 400, activation='relu',
                                 bias_initializer = tf.keras.initializers.Zeros(), kernel_initializer = init_TDmel)(inputs)
+
+        #For the 64 filters:
+        # x = tf.keras.layers.Conv1D(filters = 128, kernel_size = 400, activation='relu',
+        #                         bias_initializer = tf.keras.initializers.Zeros(), kernel_initializer = init_TDmel)(inputs)
         #compute L2 Norm 
         print("x",x.shape)
+        
         a = x[:,:,::2]#even elements (real part)
         b = x[:,:,1::2]#uneven elements (imaginary part)
         y = K.sqrt(a+b)#norm of elements (only 40 channels now)
+
         #apply haning window separately on each 40 channels (need to repmat hanning and do grouped conv)
         print("y",y.shape)
         y = tf.keras.layers.Conv1D(filters = 40, kernel_size = 400, groups = 40, strides = 160, activation='relu',
                                bias_initializer = tf.keras.initializers.Zeros(), kernel_initializer = init_Hanning)(y)
+
+        #For the 64 filters :
+        # y = tf.keras.layers.Conv1D(filters = 64, kernel_size = 400, groups = 64, strides = 160, activation='relu',
+        #                        bias_initializer = tf.keras.initializers.Zeros(), kernel_initializer = init_Hanning)(y)
         y = K.abs(y)
         y = K.log(1+y)
         print("bleu")
