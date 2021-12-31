@@ -3,12 +3,10 @@ import tensorflow as tf
 import os, json
 
 from tensorflow.keras import Model
-from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Dropout, BatchNormalization
+from tensorflow.keras.layers import LSTM, Dense, Softmax, Input, Dropout, BatchNormalization, Multiply
 import tensorflow.keras.backend as K
 
 import matplotlib.pyplot as plt
-
-from sklearn.metrics import log_loss
 
 import argparse
 
@@ -16,12 +14,10 @@ from blocks import *
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
-from sklearn.preprocessing import StandardScaler
 from sklearn.utils import class_weight
 
 from time import time
 
-from model_desy_save import TD_melfilter
 
 
 
@@ -61,7 +57,7 @@ def build_model(args,optimizer):
         x = input_
     elif args.frontEnd == "TDfilt":
         input_ = Input(shape=[40000,1],batch_size=args.batch_size,name="input")
-        x = TD_melfilter()(input_)
+        x = TD_filt()(input_)
     elif args.frontEnd == "LLD":
         input_ = Input(shape=[251,32],batch_size=args.batch_size,name="input")
         x = input_
@@ -90,7 +86,7 @@ def build_model(args,optimizer):
     return model
 
 
-def train_model(args,model,path):
+def train_model(args,model,path,log_path):
 
     if args.frontEnd == 'melfilt':
 
@@ -140,8 +136,8 @@ def train_model(args,model,path):
     
     
     id_ = np.random.randint(low=0, high=10**8)
-    os.mkdir('../log/'+str(id_))
-    checkPoint = tf.keras.callbacks.ModelCheckpoint(filepath='../log/'+str(id_)+"/",
+    os.mkdir(log_path+str(id_))
+    checkPoint = tf.keras.callbacks.ModelCheckpoint(filepath=log_path+str(id_)+"/",
                                                     monitor='val_uar_metric',
                                                     save_weights_only=True,
                                                     mode='max',save_best_only=True)
@@ -203,32 +199,35 @@ if __name__ == '__main__':
 
     for k in range(1):
         
-        model = build_model(args,tf.keras.optimizers.SGD())
+        model = build_model(args,tf.keras.optimizers.SGD(learning_rate=args.lr))
         model.summary()
 
         start = time()
-        model, history, X_val, y_val, id_ = train_model(args,model,DATA_PATH)
+        model, history, X_val, y_val, id_ = train_model(args,model,DATA_PATH,"../log/")
         print("Duration: {:.2f} minutes".format((time()-start)//60))
         print("ID = ",id_)
 
 
-        model.load_weights("../log/")
+        model.load_weights("../log/"+str(id_)+"/")
 
         X_test = np.load(path+"_test.npy",allow_pickle=True)
         if args.frontEnd == "melfilt":
             X_test = X_test.transpose([0,2,1])
         y_test = np.load(DATA_PATH+"y_test.npy",allow_pickle=True)
 
+        #model = tf.keras.models.load_model("../log/62633808/",custom_objects={'uar':uar_metric},compile=False)
 
         y_val_ = K.argmax(y_val,axis=-1)
 
-        y_pred_test = K.argmax(model.predict(X_test),axis=-1)
-        y_pred_val = K.argmax(model.predict(X_val),axis=-1)
+        y_pred_test = K.argmax(model.predict(X_test))
+        y_pred_val = K.argmax(model.predict(X_val))
+
 
         print(confusion_matrix(y_val_,y_pred_val))
         print(confusion_matrix(y_test,y_pred_test))
 
         y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+        y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
         metrics_test = model.evaluate(X_test,y_test)
         metrics_val = model.evaluate(X_val,y_val)
