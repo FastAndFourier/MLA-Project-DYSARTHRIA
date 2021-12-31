@@ -3,6 +3,7 @@ import math as m
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy.matlib
+import tensorflow.keras.backend as K
 
 
 #compute the phi wavelet to approximate the triangular frequency filter
@@ -62,7 +63,7 @@ def init_Hanning(shape, dtype=None):
     duree = 400
     t = np.arange(-duree/2,duree/2,1)
     weight = Hanning(t, s=shape[0])
-    weight = np.matlib.repmat(weight, 1, shape[2])
+    weight = K.pow(np.matlib.repmat(weight, 1, shape[2]),2)
 
     return weight.reshape(shape)
 
