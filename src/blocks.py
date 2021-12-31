@@ -13,7 +13,7 @@ def TD_filt(x):
     #compute L2 Norm 
     a = x[:,:,::2]#even elements (real part)
     b = x[:,:,1::2]#uneven elements (imaginary part)
-    y = K.sqrt(a+b)#norm of elements (only 40 channels now)
+    y = K.pow(a,2)+K.pow(b,2)#norm of elements (only 64 channels now)
 
     #apply hanning window separately on each 40 channels (need to repmat hanning and do grouped conv)
     y = tf.keras.layers.Conv1D(filters = 64, kernel_size = 400, groups = 64, strides = 160, activation='relu',

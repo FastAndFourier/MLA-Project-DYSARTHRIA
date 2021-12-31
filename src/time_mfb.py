@@ -62,7 +62,7 @@ def init_Hanning(shape, dtype=None):
     duree = 400
     t = np.arange(-duree/2,duree/2,1)
     weight = Hanning(t, s=shape[0])
-    weight = np.matlib.repmat(weight, 1, shape[2])
+    weight = K.pow(np.matlib.repmat(weight, 1, shape[2]),2)
 
     return weight.reshape(shape)
 
