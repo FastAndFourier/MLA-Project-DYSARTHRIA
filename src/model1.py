@@ -57,7 +57,7 @@ def build_model(args,optimizer):
         x = input_
     elif args.frontEnd == "TDfilt":
         input_ = Input(shape=[40000,1],batch_size=args.batch_size,name="input")
-        x = TD_filt()(input_)
+        x = TD_filt(input_)
     elif args.frontEnd == "LLD":
         input_ = Input(shape=[251,32],batch_size=args.batch_size,name="input")
         x = input_
@@ -76,8 +76,18 @@ def build_model(args,optimizer):
     
     output = Dense(2,activation='sigmoid')(x)
 
-    optimizer.learning_rate = args.lr
+    decay_step = int(10)*(6000/args.batch_size)
+    
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(args.lr,                                               
+                                                                 decay_steps=decay_step,
+                                                                 decay_rate=0.80,
+                                                                 staircase=True)
+    if args.decay:      
+        optimizer.learning_rate = lr_schedule
+    else:
+        optimizer.learning_rate = args.lr
     optimizer.momentum = 0.98
+    
     
     model = Model(input_,output)
     model.compile(optimizer=optimizer, loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
@@ -110,24 +120,10 @@ def train_model(args,model,path,log_path):
 
     y_train = np.load(path+"y_train.npy")
     y_val = np.load(path+"y_val.npy")
-
-    if args.shuffle:
-        X_train, X_val, y_train, y_val = train_test_split(np.concatenate((X_train,X_val),axis=0),
-                                                          np.concatenate((y_train,y_val),axis=0),
-                                                          test_size=0.3,random_state=42)
-
-    if args.balance:
-        n_pos = len(y_train[y_train==1])
-        ind_neg = np.argwhere(y_train==0)
-        ind_neg = np.random.permutation(ind_neg)[:n_pos].reshape(n_pos)
-        X_train = np.concatenate((X_train[y_train==1],X_train[ind_neg]),axis=0)
-        y_train = np.concatenate((y_train[y_train==1],y_train[ind_neg]),axis=0)
-
         
     class_weights = class_weight.compute_class_weight(class_weight='balanced',classes=[0,1],y=y_train)
     
     class_weights = dict(zip([0,1], class_weights))
-    print(class_weights)
 
     y_train = tf.keras.utils.to_categorical(y_train.astype(int),num_classes=2)
     y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
@@ -152,10 +148,10 @@ def train_model(args,model,path,log_path):
     return model, model.history, X_val, y_val, id_
 
 
-def save_model(model,id_,metrics_test,metrics_val):
+def save_model(model,id_,metrics_test,metrics_val,path):
     
-    os.mkdir('../model_archive/'+str(id_))
-    model.save("../model_archive/"+str(id_))
+    os.mkdir(path+str(id_))
+    model.save(path+str(id_))
 
     data = {
         "frontEnd" : args.frontEnd,
@@ -172,8 +168,54 @@ def save_model(model,id_,metrics_test,metrics_val):
     }
 
 
-    with open('../model_archive/'+str(id_)+'/model_registry.json', 'w') as outfile:
+    with open(path+str(id_)+'/model_registry.json', 'w') as outfile:
         json.dump(data, outfile)
+
+
+def load_model_lld(path):
+
+    model = tf.keras.models.load_model(path,custom_objects={'uar':uar_metric},compile=False)
+    model.compile(loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric])
+
+    X_test = np.load("../data/full_lld_is09_test.npy")
+    X_val = np.load("../data/full_lld_is09_val.npy")
+
+    y_test = np.load("../data/y_test.npy")
+    y_val = np.load("../data/y_val.npy")
+
+    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
+
+
+    metrics_test = model.evaluate(X_test,y_test,batch_size=4)
+    metrics_val = model.evaluate(X_val,y_val,batch_size=4)
+
+    print(metrics_test,metrics_val)
+
+    return model
+
+
+def load_model_melfilt(path,normalization):
+
+    model = tf.keras.models.load_model(path,compile=False)
+    model.compile(loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric])
+
+    X_test = np.load("../data/"+normalization+"_test.npy").transpose([0,2,1])
+    X_val = np.load("../data/"+normalization+"_val.npy").transpose([0,2,1])
+
+    y_test = np.load("../data/y_test.npy")
+    y_val = np.load("../data/y_val.npy")
+
+    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
+
+
+    metrics_test = model.evaluate(X_test,y_test,batch_size=2)
+    metrics_val = model.evaluate(X_val,y_val,batch_size=2)
+
+    print(metrics_test,metrics_val)
+
+    return model
 
 if __name__ == '__main__':
     
@@ -188,51 +230,50 @@ if __name__ == '__main__':
     parser.add_argument('-lr',nargs='?',type=float,default=0.0001)
     parser.add_argument('-batch_size',nargs='?',type=int,default=32)
     parser.add_argument('-epochs',nargs='?',type=int,default=5)
-    parser.add_argument('-shuffle',nargs='?',type=bool,default=False)
-    parser.add_argument('-balance',nargs='?',type=bool,default=False)
+    parser.add_argument('-decay',nargs='?',type=bool,default=False)
     
     args = parser.parse_args()
 
     path = DATA_PATH + args.normalization
     if args.frontEnd == "LLD":
         path = DATA_PATH + "full_lld_is09"
+    if args.frontEnd == "TDfilt":
+        path = DATA_PATH + "x"
 
-    for k in range(1):
         
-        model = build_model(args,tf.keras.optimizers.SGD(learning_rate=args.lr))
-        model.summary()
+    model = build_model(args,tf.keras.optimizers.SGD(learning_rate=args.lr))
+    model.summary()
 
-        start = time()
-        model, history, X_val, y_val, id_ = train_model(args,model,DATA_PATH,"../log/")
-        print("Duration: {:.2f} minutes".format((time()-start)//60))
-        print("ID = ",id_)
-
-
-        model.load_weights("../log/"+str(id_)+"/")
-
-        X_test = np.load(path+"_test.npy",allow_pickle=True)
-        if args.frontEnd == "melfilt":
-            X_test = X_test.transpose([0,2,1])
-        y_test = np.load(DATA_PATH+"y_test.npy",allow_pickle=True)
-
-        #model = tf.keras.models.load_model("../log/62633808/",custom_objects={'uar':uar_metric},compile=False)
-
-        y_val_ = K.argmax(y_val,axis=-1)
-
-        y_pred_test = K.argmax(model.predict(X_test))
-        y_pred_val = K.argmax(model.predict(X_val))
+    start = time()
+    model, history, X_val, y_val, id_ = train_model(args,model,DATA_PATH,"../log/")
+    print("Duration: {:.2f} minutes".format((time()-start)//60))
+    print("ID = ",id_)
 
 
-        print(confusion_matrix(y_val_,y_pred_val))
-        print(confusion_matrix(y_test,y_pred_test))
+    model.load_weights("../log/"+str(id_)+"/")
 
-        y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
-        y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
+    X_test = np.load(path+"_test.npy",allow_pickle=True)
+    if args.frontEnd == "melfilt":
+        X_test = X_test.transpose([0,2,1])
+    y_test = np.load(DATA_PATH+"y_test.npy",allow_pickle=True)
 
-        metrics_test = model.evaluate(X_test,y_test)
-        metrics_val = model.evaluate(X_val,y_val)
-        
-        save_model(model,id_,metrics_test,metrics_val)
+   
+    y_val_ = K.argmax(y_val,axis=-1)
+
+    y_pred_test = K.argmax(model.predict(X_test))
+    y_pred_val = K.argmax(model.predict(X_val))
+
+
+    print(confusion_matrix(y_val_,y_pred_val))
+    print(confusion_matrix(y_test,y_pred_test))
+
+    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
+    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
+
+    metrics_test = model.evaluate(X_test,y_test)
+    metrics_val = model.evaluate(X_val,y_val)
+    
+    save_model(model,id_,metrics_test,metrics_val)
 
         
 

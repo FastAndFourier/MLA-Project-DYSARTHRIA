@@ -17,25 +17,28 @@ def TD_filt(x):
     #compute L2 Norm 
     a = x[:,:,::2]#even elements (real part)
     b = x[:,:,1::2]#uneven elements (imaginary part)
-    y = Lambda(lambda a,b : K.pow(a,2)+K.pow(b,2))([a,b])#norm of elements (only 40 channels now)
+    y = K.pow(a,2)+K.pow(b,2)#norm of elements (only 40 channels now)
 
     #apply hanning window separately on each 40 channels (need to repmat hanning and do grouped conv)
     y = tf.keras.layers.Conv1D(filters = 64, kernel_size = 400, groups = 64, strides = 160, activation='relu',
                             bias_initializer = tf.keras.initializers.Zeros(), kernel_initializer = init_Hanning)(y)
     #y = Dropout(rate=0.5)(y)
-    y = Lambda(lambda x : K.abs(x))(y)
-    y = Lambda(lambda x : K.log(1+x))(x)
+    y = K.abs(y)
+    y = K.log(1+y)
 
     return y
 
 def Attention(x):
 
     
-    y = Dense(50,kernel_regularizer=tf.keras.regularizers.l2(0.001))(x)
+    y = Dense(50,kernel_regularizer=tf.keras.regularizers.l2(0.001),
+              kernel_initializer = tf.keras.initializers.RandomUniform(minval=-0.05, maxval=0.05, seed=None))(x)
+    
     y = Dropout(rate=0.5)(y)
     y = BatchNormalization()(y)    
     
-    y = Dense(1,kernel_regularizer=tf.keras.regularizers.l2(0.001))(y)
+    y = Dense(1,kernel_regularizer=tf.keras.regularizers.l2(0.001),
+              kernel_initializer = tf.keras.initializers.RandomUniform(minval=-0.05, maxval=0.05, seed=None))(y)
     y = Dropout(rate=0.5)(y)
     y = BatchNormalization()(y) 
     
