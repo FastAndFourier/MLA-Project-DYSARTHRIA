@@ -53,13 +53,13 @@ def uar_metric(y_true, y_pred):
 def build_model(args,optimizer):
 
     if args.frontEnd == "melfilt":
-        input_ = Input(shape=[251,64],batch_size=args.batch_size,name="input")
+        input_ = Input(shape=[251,64],name="input") #,batch_size=args.batch_size
         x = input_
     elif args.frontEnd == "TDfilt":
-        input_ = Input(shape=[40000,1],batch_size=args.batch_size,name="input")
+        input_ = Input(shape=[40000,1],name="input") #,batch_size=args.batch_size
         x = TD_filt(input_)
     elif args.frontEnd == "LLD":
-        input_ = Input(shape=[251,32],batch_size=args.batch_size,name="input")
+        input_ = Input(shape=[251,32],name="input") #,batch_size=args.batch_size
         x = input_
     else:
         print("Unknown frontEnd")
@@ -172,50 +172,6 @@ def save_model(model,id_,metrics_test,metrics_val,path):
         json.dump(data, outfile)
 
 
-def load_model_lld(path):
-
-    model = tf.keras.models.load_model(path,custom_objects={'uar':uar_metric},compile=False)
-    model.compile(loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric])
-
-    X_test = np.load("../data/full_lld_is09_test.npy")
-    X_val = np.load("../data/full_lld_is09_val.npy")
-
-    y_test = np.load("../data/y_test.npy")
-    y_val = np.load("../data/y_val.npy")
-
-    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
-    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
-
-
-    metrics_test = model.evaluate(X_test,y_test,batch_size=4)
-    metrics_val = model.evaluate(X_val,y_val,batch_size=4)
-
-    print(metrics_test,metrics_val)
-
-    return model
-
-
-def load_model_melfilt(path,normalization):
-
-    model = tf.keras.models.load_model(path,compile=False)
-    model.compile(loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric])
-
-    X_test = np.load("../data/"+normalization+"_test.npy").transpose([0,2,1])
-    X_val = np.load("../data/"+normalization+"_val.npy").transpose([0,2,1])
-
-    y_test = np.load("../data/y_test.npy")
-    y_val = np.load("../data/y_val.npy")
-
-    y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
-    y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
-
-
-    metrics_test = model.evaluate(X_test,y_test,batch_size=2)
-    metrics_val = model.evaluate(X_val,y_val,batch_size=2)
-
-    print(metrics_test,metrics_val)
-
-    return model
 
 if __name__ == '__main__':
     
@@ -270,8 +226,8 @@ if __name__ == '__main__':
     y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
     y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
-    metrics_test = model.evaluate(X_test,y_test)
-    metrics_val = model.evaluate(X_val,y_val)
+    metrics_test = model.evaluate(X_test,y_test,batch_size=1)
+    metrics_val = model.evaluate(X_val,y_val,batch_size=1)
     
     save_model(model,id_,metrics_test,metrics_val)
 
