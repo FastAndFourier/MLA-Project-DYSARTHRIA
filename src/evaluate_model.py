@@ -22,19 +22,22 @@ def restore_model_batch(path,frontEnd):
     
     args = parser.parse_args()
 
-    model_old = tf.keras.models.load_model(path,compile=False)
     model = build_model(args,tf.keras.optimizers.SGD())
-    w = model_old.get_weights()
-    model.set_weights(w)
+    model.load_weights(path)  
+
+    # model_old = tf.keras.models.load_model(path,compile=False)
+    # model = build_model(args,tf.keras.optimizers.SGD())
+    # w = model_old.get_weights()
+    # model.set_weights(w)
 
     return model
 
 def load_model(path,type_,evaluate=True,normalization=None):
 
-    if type_ in ["melfilt","LLD"]:
-        model = restore_model_batch(path,type_)
-    else:
-        model = tf.keras.models.load_model(path,compile=False)
+    # if type_ in ["melfilt","LLD"]:
+    model = restore_model_batch(path,type_)
+    # else:
+    #     model = tf.keras.models.load_model(path,compile=False)
 
     model.compile(loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric])
 
@@ -87,17 +90,21 @@ def visualize_attention(x,pcen,model,type_):
     plt.plot(-(att_vec[0]*300)+32,color='red')
     plt.show()
 
+
 if __name__ == "__main__":
 
-    frontEnd = "TDfilt" # TDfilt, melfilt or LLD
-    norm = None#"pcen"
-    x = np.load("../data/x_test.npy")
+    frontEnd = "LLD" # TDfilt, melfilt or LLD
+    norm = "pcen"
+    
     pcen = np.load("../data/pcen_test.npy")
+    x = np.load("../data/x_test.npy")
 
 
     # !! If frontEnd == "TDfilt", batch_1=False
-    model = load_model("../model_archive_tdfilt/model3",frontEnd,batch_1=False,normalization=norm,evaluate=True)
+    model = load_model("../log/weights_LL.h5",frontEnd,normalization=norm,evaluate=True)
 
-    index = np.random.randint(low=0,high=len(x))
+    #model.save_weights("../log/weights_LL.h5")
 
-    visualize_attention(x[index],pcen[index],model,frontEnd)
+    # index = np.random.randint(low=0,high=len(x))
+
+    # visualize_attention(x[index],pcen[index],model,frontEnd)

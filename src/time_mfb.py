@@ -65,5 +65,5 @@ def init_Hanning(shape, dtype=None):
     weight = Hanning(t, s=shape[0])
     weight = K.pow(np.matlib.repmat(weight, 1, shape[2]),2)
 
-    return weight.reshape(shape)
+    return tf.cast(tf.reshape(weight,shape),dtype=tf.float32)
 

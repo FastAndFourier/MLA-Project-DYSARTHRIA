@@ -1,0 +1,2 @@
+model_checkpoint_path: "td_filt"
+all_model_checkpoint_paths: "td_filt"
