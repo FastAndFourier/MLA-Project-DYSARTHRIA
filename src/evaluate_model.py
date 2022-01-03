@@ -103,8 +103,6 @@ if __name__ == "__main__":
     # !! If frontEnd == "TDfilt", batch_1=False
     model = load_model("../log/weights_LL.h5",frontEnd,normalization=norm,evaluate=True)
 
-    #model.save_weights("../log/weights_LL.h5")
 
-    # index = np.random.randint(low=0,high=len(x))
-
-    # visualize_attention(x[index],pcen[index],model,frontEnd)
+    index = np.random.randint(low=0,high=len(x))
+    visualize_attention(x[index],pcen[index],model,frontEnd)
