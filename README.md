@@ -10,8 +10,40 @@ Rerefence paper: *J. Millet et N. Zeghidour, « Learning to detect dysarthria f
 
 Dataset is available here: http://www.cs.toronto.edu/~complingweb/data/TORGO/torgo.html
 
-MODEL ARCHITECTURE : TIME DOMAIN FILTERBANK
+****
 
-You have the possibility to run the network with a specific convolution layer reproducing at initialization a mel filterbank with the keyword "TDfilt" for the "frontEnd" argument.
-This make the network a bit bigger with 2 convolutions and some algebra added at its beginning but the speed of the training is not strongly impact. We need to apply a unique windowing fonction accross channels (2nd convolution).
-/!\ THE USE OF THE GROUPED CONVOLUTION MAKE THE USE OF A GPU MANDATORY. THE BACKPROPAGATION CAN NOT BE APPLIED WITH A CPU, THEN WE CAN ONLY DO INFERENCE WITH A CPU.
+### Python functions and notebooks
+
+The model is build and train using two python files:
+
++ `blocks.py` which contains elementary blocks of the architecture
++ `model1.py` which gathers model building, training, and a main function
+
+Examples of command:
+
+`python model1.py -frontEnd melfilt -normalization pcen -lr 0.001 -batch_size 2 epochs 10 -decay True`
+
+`python model1.py -frontEnd LLD  -lr 0.003 -batch_size 8 epochs 10 `
+
+`python model1.py -frontEnd TDfilt -lr 0.002 -batch_size 4 epochs 10 -decay True`
+
+
+These functions utilize a set of four files which allow to extract and pre-process the data:
+
++ `time_mfb.py` for Time Domain filterbanks
++ `LLD_extract.py` for LLDs
++ `melfilt_preprocess.py` for mel-filterbanks
++ `create_dataset.py` for raw speech extraction
+
+Finally, one notebook `notebook_MLA_dysarthria.ipynb` allows to evaluate models.:exclamation: This notebook is design for Google Colab with the GPU on.
+
+### Libaries
+`tensorlflow`, `librosa` and `opensmile`
+
+
+### Note on Time-domain filterbanks model and GPU
+
+:exclamation: 
+THE USE OF THE GROUPED CONVOLUTION MAKE THE USE OF A GPU MANDATORY. THE BACKPROPAGATION CAN NOT BE APPLIED WITH A CPU, THEN WE CAN ONLY DO INFERENCE WITH A GPU 
+:exclamation:
+
