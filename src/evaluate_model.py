@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-from model1 import build_model, uar_metric
+from model import build_model, uar_metric
 
 
 def restore_model_batch(path,frontEnd):
