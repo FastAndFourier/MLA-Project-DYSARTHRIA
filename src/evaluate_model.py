@@ -29,9 +29,9 @@ def restore_model_batch(path,frontEnd):
 
     return model
 
-def load_model(path,type_,batch_1=True,evaluate=True,normalization=None):
+def load_model(path,type_,evaluate=True,normalization=None):
 
-    if batch_1:
+    if type_ in ["melfilt","LLD"]:
         model = restore_model_batch(path,type_)
     else:
         model = tf.keras.models.load_model(path,compile=False)
@@ -41,12 +41,15 @@ def load_model(path,type_,batch_1=True,evaluate=True,normalization=None):
     if type_ == "melfilt":
         X_test = np.load("../data/"+normalization+"_test.npy").transpose([0,2,1])
         X_val = np.load("../data/"+normalization+"_val.npy").transpose([0,2,1])
+        batch = 1
     elif type_ == "TDfilt":
         X_test = np.load("../data/x_test.npy")
         X_val = np.load("../data/x_val.npy")
+        batch=model.input.shape[0]
     else:
         X_test = np.load("../data/full_lld_is09_test.npy")
         X_val = np.load("../data/full_lld_is09_val.npy")
+        batch = 1
 
     y_test = np.load("../data/y_test.npy")
     y_val = np.load("../data/y_val.npy")
@@ -56,8 +59,8 @@ def load_model(path,type_,batch_1=True,evaluate=True,normalization=None):
         y_test = tf.keras.utils.to_categorical(y_test.astype(int),num_classes=2)
         y_val = tf.keras.utils.to_categorical(y_val.astype(int),num_classes=2)
 
-        metrics_test = model.evaluate(X_test,y_test,batch_size=1)
-        metrics_val = model.evaluate(X_val,y_val,batch_size=1)
+        metrics_test = model.evaluate(X_test,y_test,batch_size=batch)
+        metrics_val = model.evaluate(X_val,y_val,batch_size=batch)
 
         print(metrics_test,metrics_val)
 
@@ -93,7 +96,7 @@ if __name__ == "__main__":
 
 
     # !! If frontEnd == "TDfilt", batch_1=False
-    model = load_model("../model_archive_tdfilt/model1",frontEnd,batch_1=False,normalization=norm,evaluate=True)
+    model = load_model("../model_archive_tdfilt/model3",frontEnd,batch_1=False,normalization=norm,evaluate=True)
 
     index = np.random.randint(low=0,high=len(x))
 

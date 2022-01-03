@@ -1,13 +1,8 @@
-
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Softmax, Input, Lambda, Dropout, BatchNormalization
 import tensorflow.keras.backend as K
 
 from time_mfb import init_Hanning, init_TDmel
-
-
-
-
 
 def TD_filt(x):
 
@@ -30,7 +25,6 @@ def TD_filt(x):
 
 def Attention(x):
 
-    
     y = Dense(50,kernel_regularizer=tf.keras.regularizers.l2(0.001),
               kernel_initializer = tf.keras.initializers.RandomUniform(minval=-0.05, maxval=0.05, seed=None))(x)
     
@@ -48,3 +42,50 @@ def Attention(x):
     
     return y
 
+class CustomLayerPCEN2(tf.keras.layers.Layer):
+    "Custom Layer version 2, will replace V1 when test will be done"
+
+
+    def __init__(self, **kwargs):
+
+        super(CustomLayerPCEN2, self).__init__(**kwargs)
+        #States corresponds to the variables to learn (alpha, r and delta) / default values are 0.98/0.5/2.0
+        self.alpha = tf.Variable(initial_value=0.98, dtype='float32', name = 'alpha')
+        #r needs to stay inside [0,1] / to be tested without constraint and use abs(r) in call
+        self.r = tf.Variable(initial_value=0.5, dtype='float32', name = 'r', constraint = lambda t: tf.clip_by_value(t,0,1))
+        self.delta = tf.Variable(initial_value=2.0, dtype='float32', name ='delta')
+
+        #Constants corresponds to the constant values used in the computation (s, eps) / default values are 0.5/1e-6
+        self.s = tf.constant(value=0.5, dtype='float32', name = 's')
+        self.eps = tf.constant(value=1e-6,dtype= 'float32', name = 'eps')
+
+
+        def call(self, data):
+
+            s = self.s
+            eps = self.eps
+            M = []
+            #Loop on each feature (corresponding to each frequency in the mfcc) and each timestep
+            for i in range(data.shape[-2]):
+                prec_mean, current_mean = 0, 0
+                M_row = []
+                for j in range(data.shape[-1]):
+                #First timestep, there is no previous value, so we set prec_mean to zero
+                    if j == 0:
+                        prec_mean = 0
+                    else:
+                        prec_mean = current_mean
+                    #Compute the current mean based on the previous mean and the current value
+                    current_mean = (1-s)*prec_mean + s*data[0,i,j]
+                    M_row.append(current_mean)
+                #Compute the value of the PCEN for each t, f
+                M.append(M_row)
+
+            Madde = tf.math.add(M,self.eps)
+            Mepow = tf.math.pow(Madde, self.alpha)
+            EonM = tf.math.divide(data, Mepow)
+            EonM_delta = tf.math.add(EonM, self.delta)
+            deltapow = tf.math.pow(self.delta, self.r)
+            pcen = tf.math.subtract(tf.math.pow(EonM_delta, self.r), deltapow)
+                
+            return pcen
