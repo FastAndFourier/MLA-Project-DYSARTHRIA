@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Dense, Softmax, Input, Lambda, Dropout, Batc
 import tensorflow.keras.backend as K
 
 from time_mfb import init_Hanning, init_TDmel
+import librosa
 
 def TD_filt(x):
 
@@ -50,42 +51,52 @@ class CustomLayerPCEN2(tf.keras.layers.Layer):
 
         super(CustomLayerPCEN2, self).__init__(**kwargs)
         #States corresponds to the variables to learn (alpha, r and delta) / default values are 0.98/0.5/2.0
-        self.alpha = tf.Variable(initial_value=0.98, dtype='float32', name = 'alpha')
+        self.trainable = True
+
+    def build(self, input_shape):
+
+        self.alpha = tf.Variable(initial_value=0.98, dtype='float32', name = 'alpha', trainable = True)
         #r needs to stay inside [0,1] / to be tested without constraint and use abs(r) in call
-        self.r = tf.Variable(initial_value=0.5, dtype='float32', name = 'r', constraint = lambda t: tf.clip_by_value(t,0,1))
-        self.delta = tf.Variable(initial_value=2.0, dtype='float32', name ='delta')
+        self.r = tf.Variable(initial_value=0.5, dtype='float32', name = 'r', constraint = lambda t: tf.clip_by_value(t,0,1), trainable=True)
+        self.delta = tf.Variable(initial_value=2.0, dtype='float32', name ='delta', trainable=True)
 
         #Constants corresponds to the constant values used in the computation (s, eps) / default values are 0.5/1e-6
-        self.s = tf.constant(value=0.5, dtype='float32', name = 's')
-        self.eps = tf.constant(value=1e-6,dtype= 'float32', name = 'eps')
+        self.s = tf.Variable(initial_value=0.5, dtype='float32', name = 's', trainable=False)
+        self.eps = tf.Variable(initial_value=1e-6, dtype= 'float32', name = 'eps', trainable =False)
+    
+    def call(self, data):
+        s = self.s
+        eps = self.eps
+        M = []
+        #Loop on each feature (corresponding to each frequency in the mfcc) and each timestep
+        for i in range(data.shape[-2]):
+            prec_mean, current_mean = 0, 0
+            M_row = []
+            for j in range(data.shape[-1]):
+            #First timestep, there is no previous value, so we set prec_mean to zero
+                if j == 0:
+                    prec_mean = 0
+                else:
+                    prec_mean = current_mean
+                #Compute the current mean based on the previous mean and the current value
+                current_mean = (1-s)*prec_mean + s*data[0, i, j]
+                M_row.append(current_mean)
+            #Compute the value of the PCEN for each t, f
+            M.append(M_row)
 
+        Madde = tf.math.add(M, self.eps)
+        #print(Madde)
+        Mepow = tf.sign(Madde)*tf.pow(tf.abs(Madde), self.alpha)
+        #print(Mepow)
+        EonM = tf.math.divide(data, Mepow)
+        #print(EonM)
+        EonM_delta = tf.math.add(EonM, self.delta)
+        #print(EonM_delta)
+        deltapow = tf.math.pow(self.delta, abs(self.r))
+        #print(deltapow)
+        pcen = tf.math.subtract(tf.math.pow(EonM_delta, abs(self.r)), deltapow)
+        #print(pcen)
+    
+        # pcen=librosa.pcen(S=data, sr=16000, gain=self.alpha, bias=self.delta, power = self.r, eps=self.eps, b= self.s)
 
-        def call(self, data):
-
-            s = self.s
-            eps = self.eps
-            M = []
-            #Loop on each feature (corresponding to each frequency in the mfcc) and each timestep
-            for i in range(data.shape[-2]):
-                prec_mean, current_mean = 0, 0
-                M_row = []
-                for j in range(data.shape[-1]):
-                #First timestep, there is no previous value, so we set prec_mean to zero
-                    if j == 0:
-                        prec_mean = 0
-                    else:
-                        prec_mean = current_mean
-                    #Compute the current mean based on the previous mean and the current value
-                    current_mean = (1-s)*prec_mean + s*data[0,i,j]
-                    M_row.append(current_mean)
-                #Compute the value of the PCEN for each t, f
-                M.append(M_row)
-
-            Madde = tf.math.add(M,self.eps)
-            Mepow = tf.math.pow(Madde, self.alpha)
-            EonM = tf.math.divide(data, Mepow)
-            EonM_delta = tf.math.add(EonM, self.delta)
-            deltapow = tf.math.pow(self.delta, self.r)
-            pcen = tf.math.subtract(tf.math.pow(EonM_delta, self.r), deltapow)
-                
-            return pcen
+        return pcen

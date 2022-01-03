@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 def extract_LLD(data, config = 'IS09'):
 
-    path_config ="../../opensmile/config/is09-13/"
+    path_config ="../config/is09-13/"
     LLD_n, LLD_deltas = [], []
 
     #Load the config for Interspeech 2009
@@ -91,7 +91,7 @@ def compute_LLD_files(path, lld_name, lld_d_name):
     return y3
 
 path="../data/"
-path_config ="../../opensmile/config/is09-13/"
+path_config ="../config/is09-13/"
 
 #==================================================================#
 

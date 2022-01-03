@@ -18,6 +18,9 @@ from sklearn.utils import class_weight
 
 from time import time
 
+from tensorflow.python.ops.numpy_ops import np_config
+np_config.enable_numpy_behavior()
+
 
 
 
@@ -66,6 +69,9 @@ def build_model(args,optimizer):
         input_ = None
         return None
 
+    if args.normalization == "learn_pcen":
+        x = CustomLayerPCEN2()(x)
+        # x = Dropout(0.2)(x)
 
     x = LSTM(60, return_sequences = True)(x)
 
@@ -74,7 +80,7 @@ def build_model(args,optimizer):
     x = Lambda(lambda layer: K.sum(layer, axis = -1))(x)
     x = Multiply()([x,att])
     
-    output = Dense(2,activation='sigmoid')(x)
+    output = Dense(2, activation='sigmoid')(x)
 
     decay_step = int(10)*(6000/args.batch_size)
     
@@ -88,9 +94,8 @@ def build_model(args,optimizer):
         optimizer.learning_rate = args.lr
     optimizer.momentum = 0.98
     
-    
-    model = Model(input_,output)
-    model.compile(optimizer=optimizer, loss = "binary_crossentropy", metrics = ['binary_accuracy',uar_metric],run_eagerly=True)
+    model = Model(input_, output)
+    model.compile(optimizer=optimizer, loss = "binary_crossentropy", metrics = ['binary_accuracy', uar_metric], run_eagerly=True)
 
 
     return model
