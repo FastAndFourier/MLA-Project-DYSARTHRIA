@@ -1,1 +1,0 @@
-{"3657489": {"frontEnd": "melfilt", "backEnd": "attention", "normalization": "log", "lr": 0.0001, "batch_size": 32, "epochs": 1, "loss_val": 0.0, "accuracy_val": 0.0, "uar_val": 0.0, "loss_test": 0.0107, "accuracy_test": 0.48, "uar_test": 0.2487}}
